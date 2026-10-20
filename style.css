@@ -325,6 +325,12 @@ body {
   display: none;
 }
 
+.filter-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .filter-panel label {
   display: flex;
   flex-direction: column;
@@ -411,16 +417,6 @@ body {
 
 .member > .member-details {
   padding: 0 14px 12px 60px;
-}
-
-.member-section {
-  padding: 6px 14px;
-  font-size: 0.65rem;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  color: var(--code-purple);
-  background: var(--code-purple-soft);
-  border-bottom: 1px solid var(--line);
 }
 
 .member-avatar {
@@ -1133,4 +1129,38 @@ body {
   .map-hint {
     display: none;
   }
+}
+
+/* Cluster popup: members sharing a city */
+.cluster-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 220px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.cluster-member {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cluster-member:hover {
+  color: var(--code-purple);
+}
+
+.cluster-member .member-avatar {
+  width: 24px;
+  height: 24px;
+  font-size: 0.6rem;
 }

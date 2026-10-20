@@ -26,6 +26,7 @@
       <span id="title-text" aria-hidden="true"></span><span class="title-cursor" aria-hidden="true"></span>
     </h1>
     <div class="status-bar"><b id="stat-mapped">0</b> mapped</div>
+    <button id="view-toggle" class="theme-toggle" type="button" aria-label="2D map" aria-pressed="false">◍ Globe</button>
     <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Day mode" aria-pressed="false">☾ Night</button>
     <button id="join-button" class="join-button" type="button">Join the map</button>
   </header>
@@ -45,14 +46,7 @@
           <div class="filter">
             <button id="filter-toggle" class="filter-toggle" aria-expanded="false" aria-controls="filter-panel">Filter</button>
             <div id="filter-panel" class="filter-panel" hidden>
-              <label>
-                Year
-                <select id="filter-year"><option value="">All</option></select>
-              </label>
-              <label>
-                City
-                <select id="filter-city"><option value="">All</option></select>
-              </label>
+              <div id="filter-fields" class="filter-fields"></div>
             </div>
           </div>
         </div>
@@ -67,9 +61,8 @@
             <button id="region-close" class="sidebar-toggle" type="button" aria-label="Clear selected area">&times;</button>
           </div>
           <div class="region-levels" role="group" aria-label="Area level">
-            <button type="button" data-region-level="city" aria-pressed="false">City</button>
-            <button type="button" data-region-level="state" aria-pressed="false">State</button>
             <button type="button" data-region-level="country" aria-pressed="false">Country</button>
+            <button type="button" data-region-level="state" aria-pressed="false">State</button>
           </div>
         </div>
 
@@ -79,7 +72,7 @@
     </aside>
 
     <main id="map"></main>
-    <div id="map-hint" class="map-hint">Click a country, state or city to explore it</div>
+    <div id="map-hint" class="map-hint">Click a country or US state to explore it</div>
 
     <aside id="profile-panel" class="profile-panel" aria-labelledby="profile-title" hidden>
       <div class="sidebar-header">

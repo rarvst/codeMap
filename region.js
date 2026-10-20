@@ -1,4 +1,4 @@
-// Click a country, state or city to outline it, zoom to it and list the members there.
+// Click a country (or a US state) to outline it, zoom to it and list the members there.
 // Boundaries come from OpenStreetMap's Nominatim service: at most one request a second, cached.
 const regionBar = document.getElementById("region-bar");
 const regionName = document.getElementById("region-name");
@@ -8,10 +8,8 @@ const regionLevels = document.querySelector(".region-levels");
 const regionLevelButtons = [...regionLevels.querySelectorAll("[data-region-level]")];
 const mapHint = document.getElementById("map-hint");
 
-const NEARBY_KM = 50; // city view also lists members this close to the city center (metro areas)
-const REGION_LEVELS = ["country", "state", "city"];
-const NOMINATIM_ZOOM = { country: 3, state: 5, city: 10 };
-const DRILL_DOWN_COUNTRY = "us"; // only the US has state and city views; elsewhere you can select whole countries
+const NOMINATIM_ZOOM = { country: 3, state: 5 };
+const DRILL_DOWN_COUNTRY = "us"; // only the US has state views; elsewhere you can select whole countries
 
 // Clicking outside the highlighted area zooms back out to its continent (ISO country codes per continent).
 const CONTINENTS = [
@@ -34,9 +32,7 @@ let lookupToken = 0;
 let regionPoint = null; // [lng, lat] of the click that chose the current area
 
 function levelForZoom(zoom) {
-  if (zoom < 3.5) return "country";
-  if (zoom < 6) return "state";
-  return "city";
+  return zoom < 3.5 ? "country" : "state";
 }
 
 function polygonsOf(geometry) {
@@ -154,37 +150,29 @@ async function lookupRegion([lng, lat], level) {
   if (feature) {
     const point = [lng, lat];
     const geometry = polygonsOf(feature.geometry).length ? feature.geometry : circlePolygon(point, 10);
-    const [west, south, east, north] = focusBbox(geometry, point);
     region = {
       level,
       name: feature.properties.name || feature.properties.display_name,
       countryCode: feature.properties.address?.country_code,
       geometry,
-      bbox: [west, south, east, north],
-      center: { lng: (west + east) / 2, lat: (south + north) / 2 },
+      bbox: focusBbox(geometry, point),
     };
   }
   regionCache.set(key, region);
   return region;
 }
 
-// Members inside the area first; in city view, members just outside it follow as "nearby".
 function regionMembers(rows) {
-  const inside = [];
-  const nearby = [];
-  for (const m of rows) {
-    if (pointInGeometry([m.lng, m.lat], activeRegion.geometry)) inside.push(m);
-    else if (activeRegion.level === "city" && distanceMiles(activeRegion.center, m) * 1.609 <= NEARBY_KM) nearby.push({ ...m, nearby: true });
-  }
+  const inside = rows.filter((m) => pointInGeometry([m.lng, m.lat], activeRegion.geometry));
   activeRegion.insideCount = inside.length;
-  return [...inside, ...nearby];
+  return inside;
 }
 
 function renderRegionBar(statusText) {
   regionBar.hidden = false;
   regionName.textContent = statusText ?? activeRegion?.name ?? "";
   regionCount.textContent = statusText || !activeRegion ? "" : `${activeRegion.insideCount ?? 0} here`;
-  // Level tabs only make sense for the US, the one country with state and city views.
+  // Level tabs only make sense for the US, the one country with state views.
   regionLevels.hidden = activeRegion?.countryCode !== DRILL_DOWN_COUNTRY;
   for (const button of regionLevelButtons) {
     button.setAttribute("aria-pressed", String(button.dataset.regionLevel === activeRegion?.level));
@@ -212,7 +200,7 @@ async function showRegion(point, level) {
   let region = null;
   try {
     region = await lookupRegion(point, level);
-    // Outside the US, a state or city click selects the whole country instead.
+    // Outside the US, a state-level click selects the whole country instead.
     if (region && level !== "country" && region.countryCode !== DRILL_DOWN_COUNTRY) {
       region = await lookupRegion(point, "country");
     }
@@ -226,7 +214,7 @@ async function showRegion(point, level) {
   popup.remove();
   if (sidebar.classList.contains("collapsed")) sidebarToggle.click();
   setRegion(region);
-  map.fitBounds(region.bbox, { padding: 48, maxZoom: 11, duration: 1100, essential: true });
+  map.fitBounds(region.bbox, { padding: 48, maxZoom: MAX_ZOOM, duration: 1100, essential: true });
 }
 
 function zoomToContinent(countryCode) {
@@ -235,17 +223,15 @@ function zoomToContinent(countryCode) {
   if (continent) map.flyTo({ center: continent.center, zoom: continent.zoom, speed: 1.2, curve: 1.42, essential: true });
 }
 
-function selectRegionAt(lngLat, forcedLevel) {
+function selectRegionAt(lngLat) {
   const point = [lngLat.lng, lngLat.lat];
-  if (!activeRegion) return showRegion(point, forcedLevel ?? levelForZoom(map.getZoom()));
+  if (!activeRegion) return showRegion(point, levelForZoom(map.getZoom()));
 
   // Outside the highlighted area: step back out to its continent.
   if (!pointInGeometry(point, activeRegion.geometry)) return zoomToContinent(activeRegion.countryCode);
 
-  // Inside: US areas drill down a level (country → state → city); other countries stay as they are.
-  if (activeRegion.countryCode !== DRILL_DOWN_COUNTRY) return;
-  const level = forcedLevel ?? REGION_LEVELS[REGION_LEVELS.indexOf(activeRegion.level) + 1];
-  if (level && level !== activeRegion.level) showRegion(point, level);
+  // Inside: the US drills down from country to state; states and other countries stay as they are.
+  if (activeRegion.countryCode === DRILL_DOWN_COUNTRY && activeRegion.level === "country") showRegion(point, "state");
 }
 
 for (const button of regionLevelButtons) {
