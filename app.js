@@ -7,9 +7,8 @@ const yearSelect = document.getElementById("filter-year");
 const citySelect = document.getElementById("filter-city");
 const memberList = document.getElementById("member-list");
 const listCount = document.getElementById("list-count");
-const statMembers = document.getElementById("stat-members");
-const statCities = document.getElementById("stat-cities");
-const statClock = document.getElementById("stat-clock");
+const statMapped = document.getElementById("stat-mapped");
+const clockStrip = document.getElementById("clock-strip");
 const titleText = document.getElementById("title-text");
 
 let origin = BABSON_CAMPUS;
@@ -20,7 +19,12 @@ const map = new maplibregl.Map({
   style: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
   center: [BABSON_CAMPUS.lng, BABSON_CAMPUS.lat],
   zoom: 1.5,
+  minZoom: 0.8,
+  attributionControl: { compact: true },
 });
+// Slightly gentler wheel/trackpad zoom steps than the defaults (1/450 and 1/100) for smoother zooming.
+map.scrollZoom.setWheelZoomRate(1 / 550);
+map.scrollZoom.setZoomRate(1 / 130);
 map.addControl(new maplibregl.NavigationControl(), "top-right");
 
 const popup = new maplibregl.Popup({ offset: 12, closeButton: false });
@@ -156,10 +160,26 @@ map.on("load", () => {
   });
 });
 
+// Keep the map's focal point in the area the floating sidebar doesn't cover,
+// so the globe and fly-to targets center in the visible space.
+const sidebarDocked = matchMedia("(max-width: 720px)");
+
+function updateMapPadding() {
+  const panel = sidebar.getBoundingClientRect();
+  const area = map.getContainer().getBoundingClientRect();
+  map.setPadding(
+    sidebarDocked.matches
+      ? { top: 0, right: 0, left: 0, bottom: Math.max(0, area.bottom - panel.top) }
+      : { top: 0, right: 0, bottom: 0, left: Math.max(0, panel.right - area.left) }
+  );
+}
+new ResizeObserver(updateMapPadding).observe(sidebar);
+new ResizeObserver(updateMapPadding).observe(map.getContainer());
+
 map.on("click", "clusters", async (e) => {
   const cluster = e.features[0];
   const zoom = await map.getSource("members").getClusterExpansionZoom(cluster.properties.cluster_id);
-  map.easeTo({ center: cluster.geometry.coordinates, zoom });
+  map.easeTo({ center: cluster.geometry.coordinates, zoom, duration: 900 });
 });
 
 map.on("click", "member-points", (e) => {
@@ -214,8 +234,7 @@ function renderMembers() {
 
   updateMapMembers(rows);
   listCount.textContent = rows.length;
-  statMembers.textContent = rows.length;
-  statCities.textContent = new Set(rows.map((m) => m.city)).size;
+  statMapped.textContent = rows.length;
   memberList.replaceChildren();
 
   if (rows.length === 0) {
@@ -230,7 +249,7 @@ function renderMembers() {
     const li = document.createElement("li");
     li.className = "member";
     li.addEventListener("click", () => {
-      map.flyTo({ center: [m.lng, m.lat], zoom: 10 });
+      map.flyTo({ center: [m.lng, m.lat], zoom: 10, speed: 0.9, curve: 1.6, essential: true });
       showPopup(m);
     });
 
@@ -353,11 +372,51 @@ if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
   animateTitle();
 }
 
-function updateClock() {
-  statClock.textContent = `${new Date().toISOString().slice(11, 19)} UTC`;
+// World clocks. A green dot marks local business hours (Mon–Fri, 9:00–17:00).
+const WORLD_CLOCKS = [
+  { label: "SFO", zone: "America/Los_Angeles" },
+  { label: "NYC", zone: "America/New_York" },
+  { label: "LON", zone: "Europe/London" },
+  { label: "PAR", zone: "Europe/Paris" },
+  { label: "DXB", zone: "Asia/Dubai" },
+  { label: "HKG", zone: "Asia/Hong_Kong" },
+  { label: "TYO", zone: "Asia/Tokyo" },
+];
+
+const clocks = WORLD_CLOCKS.map(({ label, zone }) => {
+  const item = document.createElement("div");
+  item.className = "clock";
+  const dot = document.createElement("span");
+  dot.className = "clock-dot";
+  const name = document.createElement("span");
+  name.className = "clock-label";
+  name.textContent = label;
+  const time = document.createElement("span");
+  time.className = "clock-time";
+  item.append(dot, name, time);
+  clockStrip.append(item);
+  const format = new Intl.DateTimeFormat("en-GB", {
+    timeZone: zone,
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  });
+  return { item, time, format };
+});
+
+function updateClocks() {
+  const now = new Date();
+  for (const { item, time, format } of clocks) {
+    const parts = Object.fromEntries(format.formatToParts(now).map((p) => [p.type, p.value]));
+    const hour = Number(parts.hour);
+    time.textContent = `${parts.hour}:${parts.minute}:${parts.second}`;
+    item.classList.toggle("open", !["Sat", "Sun"].includes(parts.weekday) && hour >= 9 && hour < 17);
+  }
 }
-setInterval(updateClock, 1000);
-updateClock();
+setInterval(updateClocks, 1000);
+updateClocks();
 
 populateFilters();
 renderMembers();

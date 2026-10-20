@@ -25,6 +25,8 @@ html, body {
 }
 
 body {
+  display: flex;
+  flex-direction: column;
   font-family: var(--mono);
   font-size: 13px;
   background: var(--code-black);
@@ -35,6 +37,7 @@ body {
 .site-header {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
   gap: 14px;
   height: var(--header-height);
   padding: 0 var(--gutter);
@@ -61,7 +64,8 @@ body {
 .site-title {
   display: flex;
   align-items: center;
-  font-size: 1.25rem;
+  min-width: 0;
+  font-size: clamp(1rem, 0.85rem + 0.6vw, 1.25rem);
   font-weight: 700;
   letter-spacing: 0.5px;
   white-space: nowrap;
@@ -94,28 +98,79 @@ body {
 }
 
 .status-bar {
-  display: flex;
-  gap: 18px;
+  flex-shrink: 0;
   margin-left: auto;
+  padding: 4px 10px;
+  border: 1px solid var(--line-strong);
   font-size: 0.75rem;
   letter-spacing: 1px;
   text-transform: uppercase;
   color: var(--muted);
+  white-space: nowrap;
 }
 
 .status-bar b {
   color: var(--code-green);
-  font-weight: 500;
+  font-weight: 700;
 }
 
-.status-bar .status-clock {
+/* World clocks */
+.clock-strip {
+  display: flex;
+  flex-shrink: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: var(--panel-solid);
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.clock-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.clock {
+  display: flex;
+  flex: 1 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 5px 14px;
+  font-size: 0.72rem;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.clock + .clock {
+  border-left: 1px solid var(--line);
+}
+
+.clock-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+
+.clock.open .clock-dot {
+  background: var(--code-green);
+  box-shadow: 0 0 6px var(--code-green);
+}
+
+.clock-label {
   color: var(--code-purple);
+  font-weight: 700;
+}
+
+.clock-time {
+  color: var(--text);
 }
 
 /* Layout: the map fills the page and the sidebar floats above it. */
 .layout {
   position: relative;
-  height: calc(100% - var(--header-height));
+  flex: 1;
+  min-height: 0;
 }
 
 #map {
@@ -134,10 +189,11 @@ body {
   top: var(--gutter);
   left: var(--gutter);
   bottom: var(--gutter);
-  z-index: 2;
+  z-index: 3;
   display: flex;
   flex-direction: column;
-  width: min(340px, calc(100% - 2 * var(--gutter)));
+  width: clamp(270px, 28vw, 360px);
+  max-width: calc(100% - 2 * var(--gutter));
   background: var(--panel);
   border: 1px solid var(--line-strong);
   border-top: 2px solid var(--code-green);
@@ -312,7 +368,22 @@ body {
 .member-list {
   flex: 1;
   overflow-y: auto;
+  overscroll-behavior: contain;
   list-style: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.member-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.member-list::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+}
+
+.member-list::-webkit-scrollbar-thumb:hover {
+  background: var(--code-purple);
 }
 
 .member {
@@ -441,13 +512,87 @@ body {
   color: var(--code-purple);
 }
 
-@media (max-width: 640px) {
-  .status-bar {
+/* Narrow windows (phones, or heavy browser zoom): dock the sidebar to the bottom. */
+@media (max-width: 720px) {
+  :root {
+    --gutter: 10px;
+  }
+
+  .sidebar {
+    top: auto;
+    right: var(--gutter);
+    width: auto;
+    max-width: none;
+    height: 50%;
+  }
+
+  .sidebar.collapsed {
+    width: auto;
+    height: auto;
+  }
+
+  .sidebar.collapsed .sidebar-header {
+    justify-content: space-between;
+    padding: 8px 10px 8px 14px;
+  }
+
+  .sidebar.collapsed .sidebar-header h2 {
+    display: block;
+  }
+
+  .sidebar-toggle {
+    transform: rotate(-90deg);
+  }
+
+  .clock {
+    padding: 5px 10px;
+  }
+}
+
+/* Short windows: tighten vertical spacing so the list keeps room. */
+@media (max-height: 560px) {
+  :root {
+    --header-height: 44px;
+  }
+
+  .logo {
+    width: 30px;
+    height: 30px;
+    font-size: 12px;
+  }
+
+  .sidebar-header {
+    padding: 6px 10px 6px 14px;
+  }
+
+  .search-row {
+    padding: 6px 14px;
+  }
+
+  .list-heading,
+  .maplibregl-ctrl-compass {
     display: none;
   }
 
-  .site-title {
-    font-size: 1rem;
+  .member {
+    padding: 6px 14px;
+  }
+
+  .member-avatar {
+    width: 28px;
+    height: 28px;
+  }
+}
+
+@media (max-height: 420px) {
+  .clock-strip {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) and (max-height: 560px) {
+  .sidebar {
+    height: 62%;
   }
 }
 
