@@ -227,6 +227,12 @@ function memberDetails(m) {
     badge.textContent = "● Live location";
     details.append(badge);
   }
+  if (m.sample) {
+    const badge = document.createElement("span");
+    badge.className = "sample-badge";
+    badge.textContent = "Sample profile";
+    details.append(badge);
+  }
   if (m.company) details.append(detailLine("Company", m.company));
   if (m.industry) details.append(detailLine("Industry", m.industry));
   if (m.heritage) details.append(detailLine("Heritage", m.heritage));
@@ -498,10 +504,7 @@ async function loadMembers() {
     .select(
       "id, name, year, city, country, lat, lng, linkedin_url, website_url, image_url, heritage, industry, company, code_position, live_mode, live_city, live_country, live_lat, live_lng"
     );
-  if (error) {
-    console.error("Could not load members:", error.message);
-    return;
-  }
+  if (error) console.error("Could not load members:", error.message);
 
   const contacts = new Map();
   const { data: auth } = await db.auth.getSession();
@@ -511,7 +514,7 @@ async function loadMembers() {
     for (const row of rows ?? []) contacts.set(row.id, row);
   }
 
-  members = data.map((p) => ({
+  const realMembers = (data ?? []).map((p) => ({
     id: p.id,
     name: p.name,
     year: p.year,
@@ -526,6 +529,8 @@ async function loadMembers() {
     email: contacts.get(p.id)?.email,
     phone: contacts.get(p.id)?.phone,
   }));
+  // Sample profiles (sample-members.js) are shown alongside real ones until that file is removed.
+  members = [...realMembers, ...(typeof SAMPLE_MEMBERS === "undefined" ? [] : SAMPLE_MEMBERS)];
   populateFilters();
   refreshTools();
   renderMembers();
@@ -605,7 +610,21 @@ function renderMembers() {
     return;
   }
 
-  for (const m of rows) memberList.append(memberRow(m));
+  // Your own profile is pinned above everyone else, in its own section.
+  const self = rows.find((m) => m.id && m.id === origin.memberId);
+  if (self) {
+    const row = memberRow(self);
+    row.classList.add("member-self");
+    memberList.append(sectionHeading("Your profile"), row, sectionHeading("Members"));
+  }
+  for (const m of rows) if (m !== self) memberList.append(memberRow(m));
+}
+
+function sectionHeading(text) {
+  const li = document.createElement("li");
+  li.className = "member-section";
+  li.textContent = text;
+  return li;
 }
 
 sidebarToggle.addEventListener("click", () => {

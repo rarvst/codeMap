@@ -1303,3 +1303,37 @@ body {
     padding: 4px 8px;
   }
 }
+
+/* Member list sections: your own profile is pinned above everyone else */
+.member-section {
+  padding: 6px 14px;
+  font-size: 0.62rem;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--panel-solid);
+  border-bottom: 1px solid var(--line);
+}
+
+.member.member-self {
+  border-left-color: var(--code-green);
+  background: color-mix(in srgb, var(--code-green) 10%, transparent);
+}
+
+.member.member-self .member-name {
+  color: var(--green-text);
+  font-weight: 700;
+}
+
+.member.member-self + .member-section {
+  border-top: 1px solid var(--line-strong);
+}
+
+.sample-badge {
+  padding: 2px 6px;
+  border: 1px dashed var(--muted);
+  color: var(--muted);
+  font-size: 0.62rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
