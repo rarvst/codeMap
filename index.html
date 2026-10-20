@@ -3,14 +3,24 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Babson CODE Network Map</title>
+  <title>Where is CODE?</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&display=swap">
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header class="site-header">
     <div class="logo" aria-hidden="true">&lt;/&gt;</div>
-    <h1 class="site-title">Babson CODE</h1>
+    <h1 class="site-title" aria-label="Where is CODE?">
+      <span id="title-text" aria-hidden="true"></span><span class="title-cursor" aria-hidden="true"></span>
+    </h1>
+    <div class="status-bar">
+      <span>Members <b id="stat-members">0</b></span>
+      <span>Cities <b id="stat-cities">0</b></span>
+      <span id="stat-clock" class="status-clock"></span>
+    </div>
   </header>
 
   <div class="layout">
@@ -38,7 +48,7 @@
           </div>
         </div>
 
-        <h3 class="list-heading">All Members</h3>
+        <h3 class="list-heading"><span>All Members</span><span id="list-count"></span></h3>
         <ul id="member-list" class="member-list"></ul>
       </div>
     </aside>
