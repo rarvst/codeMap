@@ -4,12 +4,28 @@ const regionBar = document.getElementById("region-bar");
 const regionName = document.getElementById("region-name");
 const regionCount = document.getElementById("region-count");
 const regionClose = document.getElementById("region-close");
-const regionLevelButtons = [...document.querySelectorAll("[data-region-level]")];
+const regionLevels = document.querySelector(".region-levels");
+const regionLevelButtons = [...regionLevels.querySelectorAll("[data-region-level]")];
 const mapHint = document.getElementById("map-hint");
 
 const NEARBY_KM = 50; // city view also lists members this close to the city center (metro areas)
 const REGION_LEVELS = ["country", "state", "city"];
 const NOMINATIM_ZOOM = { country: 3, state: 5, city: 10 };
+const DRILL_DOWN_COUNTRY = "us"; // only the US has state and city views; elsewhere you can select whole countries
+
+// Clicking outside the highlighted area zooms back out to its continent (ISO country codes per continent).
+const CONTINENTS = [
+  { center: [-100, 45], zoom: 2.3, countries: "us ca mx gt bz sv hn ni cr pa cu jm ht do bs bb tt ag dm gd kn lc vc pr gl bm ky tc vg vi aw cw sx ai ms gp mq bl mf pm bq" },
+  { center: [-60, -18], zoom: 2.4, countries: "br ar cl co pe ve ec bo py uy gy sr gf fk" },
+  { center: [15, 52], zoom: 3.1, countries: "gb ie fr de nl be lu ch at it es pt ad mc sm va mt dk no se fi is ee lv lt pl cz sk hu si hr ba rs me mk al gr bg ro md ua by ru li xk cy fo gi im je gg ax sj" },
+  { center: [20, 3], zoom: 2.4, countries: "dz eg ly ma tn eh sd ss et er dj so ke ug tz rw bi cd cg cf cm ga gq st ng ne td ml bf sn gm gw gn sl lr ci gh tg bj mr cv ao zm zw mw mz mg mu sc km na bw za ls sz re yt sh" },
+  { center: [90, 32], zoom: 2.2, countries: "cn jp kr kp mn tw hk mo in pk bd lk np bt mv af ir iq sy lb jo il ps sa ye om ae qa bh kw tr ge am az kz uz tm kg tj th vn la kh mm my sg id ph bn tl" },
+  { center: [145, -25], zoom: 2.7, countries: "au nz pg fj sb vu nc pf ws to ki tv nr fm mh pw gu as ck nu" },
+];
+
+function continentOf(countryCode) {
+  return CONTINENTS.find((c) => c.countries.split(" ").includes(countryCode));
+}
 const EMPTY_COLLECTION = { type: "FeatureCollection", features: [] };
 
 const regionCache = new Map();
@@ -18,8 +34,8 @@ let lookupToken = 0;
 let regionPoint = null; // [lng, lat] of the click that chose the current area
 
 function levelForZoom(zoom) {
-  if (zoom < 3) return "country";
-  if (zoom < 5.5) return "state";
+  if (zoom < 3.5) return "country";
+  if (zoom < 6) return "state";
   return "city";
 }
 
@@ -122,6 +138,7 @@ async function lookupRegion([lng, lat], level) {
 
   const params = new URLSearchParams({
     format: "geojson",
+    addressdetails: "1",
     polygon_geojson: "1",
     polygon_threshold: level === "country" ? "0.02" : "0.003",
     zoom: String(NOMINATIM_ZOOM[level]),
@@ -141,6 +158,7 @@ async function lookupRegion([lng, lat], level) {
     region = {
       level,
       name: feature.properties.name || feature.properties.display_name,
+      countryCode: feature.properties.address?.country_code,
       geometry,
       bbox: [west, south, east, north],
       center: { lng: (west + east) / 2, lat: (south + north) / 2 },
@@ -166,6 +184,8 @@ function renderRegionBar(statusText) {
   regionBar.hidden = false;
   regionName.textContent = statusText ?? activeRegion?.name ?? "";
   regionCount.textContent = statusText || !activeRegion ? "" : `${activeRegion.insideCount ?? 0} here`;
+  // Level tabs only make sense for the US, the one country with state and city views.
+  regionLevels.hidden = activeRegion?.countryCode !== DRILL_DOWN_COUNTRY;
   for (const button of regionLevelButtons) {
     button.setAttribute("aria-pressed", String(button.dataset.regionLevel === activeRegion?.level));
   }
@@ -192,6 +212,10 @@ async function showRegion(point, level) {
   let region = null;
   try {
     region = await lookupRegion(point, level);
+    // Outside the US, a state or city click selects the whole country instead.
+    if (region && level !== "country" && region.countryCode !== DRILL_DOWN_COUNTRY) {
+      region = await lookupRegion(point, "country");
+    }
   } catch (err) {
     console.error(err);
   }
@@ -202,19 +226,26 @@ async function showRegion(point, level) {
   popup.remove();
   if (sidebar.classList.contains("collapsed")) sidebarToggle.click();
   setRegion(region);
-  map.fitBounds(region.bbox, { padding: 48, maxZoom: 11, duration: 1200, essential: true });
+  map.fitBounds(region.bbox, { padding: 48, maxZoom: 11, duration: 1100, essential: true });
+}
+
+function zoomToContinent(countryCode) {
+  const continent = continentOf(countryCode);
+  clearRegion();
+  if (continent) map.flyTo({ center: continent.center, zoom: continent.zoom, speed: 1.2, curve: 1.42, essential: true });
 }
 
 function selectRegionAt(lngLat, forcedLevel) {
   const point = [lngLat.lng, lngLat.lat];
-  let level = forcedLevel ?? levelForZoom(map.getZoom());
-  // Clicking inside the selected area drills down a level: country → state → city.
-  if (!forcedLevel && activeRegion && pointInGeometry(point, activeRegion.geometry)) {
-    const deeper = REGION_LEVELS[REGION_LEVELS.indexOf(activeRegion.level) + 1];
-    if (!deeper) return;
-    level = deeper;
-  }
-  showRegion(point, level);
+  if (!activeRegion) return showRegion(point, forcedLevel ?? levelForZoom(map.getZoom()));
+
+  // Outside the highlighted area: step back out to its continent.
+  if (!pointInGeometry(point, activeRegion.geometry)) return zoomToContinent(activeRegion.countryCode);
+
+  // Inside: US areas drill down a level (country → state → city); other countries stay as they are.
+  if (activeRegion.countryCode !== DRILL_DOWN_COUNTRY) return;
+  const level = forcedLevel ?? REGION_LEVELS[REGION_LEVELS.indexOf(activeRegion.level) + 1];
+  if (level && level !== activeRegion.level) showRegion(point, level);
 }
 
 for (const button of regionLevelButtons) {

@@ -48,19 +48,10 @@ body {
 }
 
 .logo {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
   flex-shrink: 0;
   width: 36px;
   height: 36px;
-  border-radius: 50%;
-  background: var(--code-green);
-  color: var(--code-black);
-  font-family: var(--mono);
-  font-weight: 800;
-  font-size: 14px;
-  letter-spacing: -1px;
 }
 
 .site-title {
@@ -589,7 +580,6 @@ body {
   .logo {
     width: 30px;
     height: 30px;
-    font-size: 12px;
   }
 
   .sidebar-header {
@@ -990,6 +980,10 @@ body {
 .region-levels {
   display: flex;
   margin-top: 8px;
+}
+
+.region-levels[hidden] {
+  display: none;
 }
 
 .region-levels button {
