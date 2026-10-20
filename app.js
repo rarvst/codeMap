@@ -58,9 +58,9 @@ const map = new maplibregl.Map({
   minZoom: 0.8,
   attributionControl: { compact: true },
 });
-// Slightly gentler wheel/trackpad zoom steps than the defaults (1/450 and 1/100) for smoother zooming.
-map.scrollZoom.setWheelZoomRate(1 / 550);
-map.scrollZoom.setZoomRate(1 / 130);
+// More responsive wheel/trackpad zoom than the defaults (1/450 and 1/100); MapLibre eases each step.
+map.scrollZoom.setWheelZoomRate(1 / 280);
+map.scrollZoom.setZoomRate(1 / 65);
 map.addControl(new maplibregl.NavigationControl(), "top-right");
 
 const popup = new maplibregl.Popup({ offset: 12, closeButton: false, focusAfterOpen: false });
