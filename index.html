@@ -17,6 +17,7 @@
       <span id="title-text" aria-hidden="true"></span><span class="title-cursor" aria-hidden="true"></span>
     </h1>
     <div class="status-bar"><b id="stat-mapped">0</b> mapped</div>
+    <button id="join-button" class="join-button" type="button">Join the map</button>
   </header>
 
   <div id="clock-strip" class="clock-strip" aria-label="World clocks"></div>
@@ -52,10 +53,72 @@
     </aside>
 
     <main id="map"></main>
+
+    <aside id="profile-panel" class="profile-panel" aria-labelledby="profile-title" hidden>
+      <div class="sidebar-header">
+        <h2 id="profile-title">My Profile</h2>
+        <button id="profile-close" class="sidebar-toggle" type="button" aria-label="Close profile">&times;</button>
+      </div>
+
+      <form id="profile-form" class="profile-form" novalidate>
+        <div class="photo-row">
+          <div id="photo-preview" class="member-avatar photo-preview"></div>
+          <div class="photo-actions">
+            <label class="text-button">
+              Upload photo
+              <input id="profile-photo" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+            </label>
+            <button id="photo-remove" class="text-button" type="button">Remove</button>
+          </div>
+        </div>
+
+        <label class="field">
+          <span>Name <em>*</em></span>
+          <input name="name" type="text" maxlength="80" autocomplete="name" required>
+        </label>
+
+        <label class="field">
+          <span>Class year <em>*</em></span>
+          <input name="year" type="number" min="1950" max="2100" inputmode="numeric" required>
+        </label>
+
+        <div class="field city-field">
+          <label for="profile-city">City <em>*</em></label>
+          <input id="profile-city" name="city" type="text" autocomplete="off" placeholder="Start typing your city" required
+                 role="combobox" aria-autocomplete="list" aria-controls="city-suggestions" aria-expanded="false">
+          <ul id="city-suggestions" class="city-suggestions" role="listbox" hidden></ul>
+        </div>
+
+        <label class="field">
+          <span>Headline</span>
+          <input name="headline" type="text" maxlength="120" placeholder="Building a fintech app">
+        </label>
+
+        <label class="field">
+          <span>LinkedIn</span>
+          <input name="linkedin" type="url" placeholder="https://linkedin.com/in/you">
+        </label>
+
+        <label class="field">
+          <span>GitHub / website</span>
+          <input name="website" type="url" placeholder="https://github.com/you">
+        </label>
+
+        <p id="profile-status" class="profile-status" role="status"></p>
+
+        <div class="profile-actions">
+          <button id="profile-save" class="primary-button" type="submit">Save</button>
+          <button id="profile-signout" class="text-button" type="button">Sign out</button>
+          <button id="profile-delete" class="danger-button" type="button" hidden>Delete profile</button>
+        </div>
+      </form>
+    </aside>
   </div>
 
   <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
   <script src="config.js"></script>
   <script src="app.js"></script>
+  <script src="profile.js"></script>
 </body>
 </html>

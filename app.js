@@ -11,7 +11,10 @@ const statMapped = document.getElementById("stat-mapped");
 const clockStrip = document.getElementById("clock-strip");
 const titleText = document.getElementById("title-text");
 
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
 let origin = BABSON_CAMPUS;
+let members = [];
 let visibleMembers = [];
 
 const map = new maplibregl.Map({
@@ -27,15 +30,15 @@ map.scrollZoom.setWheelZoomRate(1 / 550);
 map.scrollZoom.setZoomRate(1 / 130);
 map.addControl(new maplibregl.NavigationControl(), "top-right");
 
-const popup = new maplibregl.Popup({ offset: 12, closeButton: false });
+const popup = new maplibregl.Popup({ offset: 12, closeButton: false, focusAfterOpen: false });
 
 function toGeoJSON(members) {
   return {
     type: "FeatureCollection",
-    features: members.map((m) => ({
+    features: members.map((m, index) => ({
       type: "Feature",
       geometry: { type: "Point", coordinates: [m.lng, m.lat] },
-      properties: { name: m.name, city: m.city, year: m.year, lat: m.lat, lng: m.lng },
+      properties: { index },
     })),
   };
 }
@@ -43,7 +46,10 @@ function toGeoJSON(members) {
 // One point per distinct city, used for the city labels.
 function citiesGeoJSON(members) {
   const cities = new Map();
-  for (const m of members) if (!cities.has(m.city)) cities.set(m.city, m);
+  for (const m of members) {
+    const key = `${m.city}|${m.country}`;
+    if (!cities.has(key)) cities.set(key, m);
+  }
   return {
     type: "FeatureCollection",
     features: [...cities.values()].map((m) => ({
@@ -60,16 +66,75 @@ function updateMapMembers(members) {
   map.getSource("member-cities")?.setData(citiesGeoJSON(members));
 }
 
+// Only http(s) links are rendered, so a profile can never inject a javascript: URL.
+function safeUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return ["https:", "http:"].includes(parsed.protocol) ? parsed.href : null;
+  } catch {
+    return null;
+  }
+}
+
+function memberAvatar(m) {
+  const avatar = document.createElement("div");
+  avatar.className = "member-avatar";
+  const src = m.image && safeUrl(m.image);
+  if (src) {
+    const img = document.createElement("img");
+    img.src = src;
+    img.alt = "";
+    img.referrerPolicy = "no-referrer";
+    avatar.append(img);
+  } else {
+    avatar.textContent = initials(m.name);
+  }
+  return avatar;
+}
+
 // Built with DOM nodes rather than HTML so member-provided text is never parsed as markup.
 function showPopup(m) {
   const content = document.createElement("div");
+  content.className = "popup";
+
+  const head = document.createElement("div");
+  head.className = "popup-head";
+  const text = document.createElement("div");
   const name = document.createElement("div");
   name.className = "popup-name";
   name.textContent = m.name;
   const meta = document.createElement("div");
   meta.className = "popup-meta";
-  meta.textContent = `${m.city} · ${m.year}`;
-  content.append(name, meta);
+  meta.textContent = `${m.city}, ${m.country} · ${m.year}`;
+  text.append(name, meta);
+  head.append(memberAvatar(m), text);
+  content.append(head);
+
+  if (m.headline) {
+    const headline = document.createElement("div");
+    headline.className = "popup-headline";
+    headline.textContent = m.headline;
+    content.append(headline);
+  }
+
+  const links = [
+    ["LinkedIn", m.linkedin],
+    ["Website", m.website],
+  ].filter(([, url]) => url && safeUrl(url));
+  if (links.length) {
+    const row = document.createElement("div");
+    row.className = "popup-links";
+    for (const [label, url] of links) {
+      const a = document.createElement("a");
+      a.href = safeUrl(url);
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.textContent = `${label} ↗`;
+      row.append(a);
+    }
+    content.append(row);
+  }
+
   popup.setLngLat([m.lng, m.lat]).setDOMContent(content).addTo(map);
 }
 
@@ -183,7 +248,7 @@ map.on("click", "clusters", async (e) => {
 });
 
 map.on("click", "member-points", (e) => {
-  showPopup(e.features[0].properties);
+  showPopup(visibleMembers[e.features[0].properties.index]);
 });
 
 for (const layer of ["clusters", "member-points"]) {
@@ -211,11 +276,44 @@ function initials(name) {
     .toUpperCase();
 }
 
+// Rebuilds the filter options after each load, keeping the current choice when it still exists.
 function populateFilters() {
-  const years = [...new Set(MEMBERS.map((m) => m.year))].sort();
-  const cities = [...new Set(MEMBERS.map((m) => m.city))].sort();
-  for (const year of years) yearSelect.add(new Option(year, year));
-  for (const city of cities) citySelect.add(new Option(city, city));
+  const years = [...new Set(members.map((m) => String(m.year)))].sort();
+  const cities = [...new Set(members.map((m) => m.city))].sort();
+  for (const [select, values] of [
+    [yearSelect, years],
+    [citySelect, cities],
+  ]) {
+    const current = select.value;
+    select.length = 1;
+    for (const value of values) select.add(new Option(value, value));
+    select.value = values.includes(current) ? current : "";
+  }
+}
+
+async function loadMembers() {
+  const { data, error } = await db
+    .from("profiles")
+    .select("id, name, year, city, country, lat, lng, headline, linkedin_url, website_url, image_url");
+  if (error) {
+    console.error("Could not load members:", error.message);
+    return;
+  }
+  members = data.map((p) => ({
+    id: p.id,
+    name: p.name,
+    year: p.year,
+    city: p.city,
+    country: p.country,
+    lat: p.lat,
+    lng: p.lng,
+    headline: p.headline,
+    linkedin: p.linkedin_url,
+    website: p.website_url,
+    image: p.image_url,
+  }));
+  populateFilters();
+  renderMembers();
 }
 
 function renderMembers() {
@@ -223,7 +321,7 @@ function renderMembers() {
   const year = yearSelect.value;
   const city = citySelect.value;
 
-  const rows = MEMBERS.filter(
+  const rows = members.filter(
     (m) =>
       (!query || m.name.toLowerCase().includes(query) || m.city.toLowerCase().includes(query)) &&
       (!year || String(m.year) === year) &&
@@ -240,7 +338,7 @@ function renderMembers() {
   if (rows.length === 0) {
     const empty = document.createElement("li");
     empty.className = "member-empty";
-    empty.textContent = "No members found";
+    empty.textContent = members.length ? "No members found" : "No one yet. Join the map!";
     memberList.append(empty);
     return;
   }
@@ -252,17 +350,6 @@ function renderMembers() {
       map.flyTo({ center: [m.lng, m.lat], zoom: 10, speed: 0.9, curve: 1.6, essential: true });
       showPopup(m);
     });
-
-    const avatar = document.createElement("div");
-    avatar.className = "member-avatar";
-    if (m.image) {
-      const img = document.createElement("img");
-      img.src = m.image;
-      img.alt = "";
-      avatar.append(img);
-    } else {
-      avatar.textContent = initials(m.name);
-    }
 
     const info = document.createElement("div");
     info.className = "member-info";
@@ -278,7 +365,7 @@ function renderMembers() {
     dist.className = "member-distance";
     dist.textContent = `${m.distance.toFixed(1)} mi`;
 
-    li.append(avatar, info, dist);
+    li.append(memberAvatar(m), info, dist);
     memberList.append(li);
   }
 }
@@ -418,5 +505,5 @@ function updateClocks() {
 setInterval(updateClocks, 1000);
 updateClocks();
 
-populateFilters();
 renderMembers();
+loadMembers();
