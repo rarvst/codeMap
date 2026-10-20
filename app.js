@@ -160,7 +160,6 @@ function updateMapMembers(members) {
   visibleMembers = members;
   map.getSource("members")?.setData(toGeoJSON(members));
   map.getSource("member-cities")?.setData(citiesGeoJSON(members));
-  updateHeat(members);
 }
 
 // Only http(s) links are rendered, so a profile can never inject a javascript: URL.
@@ -270,7 +269,24 @@ function showPopup(m) {
   content.append(head, memberDetails(m));
 
   popup.setLngLat([m.lng, m.lat]).setDOMContent(content).addTo(map);
+  markSelected(m.id);
+  memberList.querySelector(".member.selected")?.scrollIntoView({ block: "nearest" });
 }
+
+// The member whose card is open on the map is the only one highlighted in the sidebar.
+let selectedMemberId = null;
+
+function markSelected(id) {
+  selectedMemberId = id;
+  for (const row of memberList.querySelectorAll(".member")) row.classList.toggle("selected", row.dataset.id === id);
+}
+
+popup.on("close", () => {
+  // Switching members closes and reopens the popup, so only clear the highlight if it stays closed.
+  setTimeout(() => {
+    if (!popup.isOpen()) markSelected(null);
+  });
+});
 
 // Only member cities get labels; country names appear once zoomed in.
 const COUNTRY_LABEL_MIN_ZOOM = 4;
@@ -300,7 +316,6 @@ map.on("style.load", () => {
   }
 
   addRegionLayers(colors);
-  addHeatLayer();
 
   // Clustering merges members in the same city into one numbered dot until zoomed in.
   map.addSource("members", {
@@ -370,8 +385,6 @@ map.on("style.load", () => {
       "text-halo-width": 1.5,
     },
   });
-
-  applyHeatVisibility();
 });
 
 // Keep the map's focal point in the area the floating sidebar doesn't cover,
@@ -412,6 +425,7 @@ function showClusterPopup(lngLat, group) {
   }
   content.append(title, list);
   popup.setLngLat(lngLat).setDOMContent(content).addTo(map);
+  markSelected(null);
 }
 
 map.on("click", "clusters", async (e) => {
@@ -539,11 +553,12 @@ async function loadMembers() {
 function memberRow(m) {
   const li = document.createElement("li");
   li.className = "member";
+  li.dataset.id = m.id;
+  li.classList.toggle("selected", m.id === selectedMemberId);
 
   const summary = document.createElement("button");
   summary.type = "button";
   summary.className = "member-summary";
-  summary.setAttribute("aria-expanded", "false");
 
   const info = document.createElement("div");
   info.className = "member-info";
@@ -561,21 +576,13 @@ function memberRow(m) {
 
   summary.append(memberAvatar(m), info, dist);
 
-  const details = memberDetails(m);
-  details.hidden = true;
-
-  // Clicking a member expands their details; outside a selected region it also flies to them.
+  // Clicking a member opens their card on the map; outside a selected region it also flies to them.
   summary.addEventListener("click", () => {
-    const expanded = details.hidden;
-    details.hidden = !expanded;
-    li.classList.toggle("expanded", expanded);
-    summary.setAttribute("aria-expanded", String(expanded));
-    if (!expanded) return;
     if (!activeRegion) map.flyTo({ center: [m.lng, m.lat], zoom: MEMBER_ZOOM, speed: 1.2, curve: 1.42, essential: true });
     showPopup(m);
   });
 
-  li.append(summary, details);
+  li.append(summary);
   return li;
 }
 
