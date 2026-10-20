@@ -3,8 +3,7 @@ const sidebarToggle = document.getElementById("sidebar-toggle");
 const searchInput = document.getElementById("member-search");
 const filterToggle = document.getElementById("filter-toggle");
 const filterPanel = document.getElementById("filter-panel");
-const yearSelect = document.getElementById("filter-year");
-const citySelect = document.getElementById("filter-city");
+const filterFields = document.getElementById("filter-fields");
 const memberList = document.getElementById("member-list");
 const listCount = document.getElementById("list-count");
 const distanceOrigin = document.getElementById("distance-origin");
@@ -12,6 +11,7 @@ const statMapped = document.getElementById("stat-mapped");
 const clockStrip = document.getElementById("clock-strip");
 const titleText = document.getElementById("title-text");
 const themeToggle = document.getElementById("theme-toggle");
+const viewToggle = document.getElementById("view-toggle");
 
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
@@ -50,12 +50,25 @@ const MAP_THEMES = {
 
 let theme = document.documentElement.dataset.theme === "light" ? "light" : "dark";
 
+// "globe" (3D) or "mercator" (flat 2D map), remembered per browser like the theme.
+let view = "globe";
+try {
+  if (localStorage.getItem("view") === "mercator") view = "mercator";
+} catch {
+  // Storage unavailable; default to the globe.
+}
+
+// The map stops at roughly state level; members are shown by city, never closer.
+const MAX_ZOOM = 8;
+const MEMBER_ZOOM = 7;
+
 const map = new maplibregl.Map({
   container: "map",
   style: MAP_THEMES[theme].style,
   center: [BABSON_CAMPUS.lng, BABSON_CAMPUS.lat],
   zoom: 1.5,
   minZoom: 0.8,
+  maxZoom: MAX_ZOOM,
   attributionControl: { compact: true },
 });
 // More responsive wheel/trackpad zoom than the defaults (1/450 and 1/100); MapLibre eases each step.
@@ -84,6 +97,25 @@ function setTheme(next) {
 
 themeToggle.addEventListener("click", () => setTheme(theme === "dark" ? "light" : "dark"));
 showThemeToggle();
+
+function showViewToggle() {
+  viewToggle.textContent = view === "globe" ? "◍ Globe" : "▭ 2D map";
+  viewToggle.setAttribute("aria-pressed", String(view === "mercator"));
+}
+
+function setView(next) {
+  view = next;
+  showViewToggle();
+  try {
+    localStorage.setItem("view", next);
+  } catch {
+    // Storage unavailable; the view still applies for this visit.
+  }
+  map.setProjection({ type: next });
+}
+
+viewToggle.addEventListener("click", () => setView(view === "globe" ? "mercator" : "globe"));
+showViewToggle();
 
 function toGeoJSON(members) {
   return {
@@ -222,7 +254,7 @@ const COUNTRY_LABEL_MIN_ZOOM = 4;
 // Runs on first load and again after every theme switch, since setStyle replaces all layers.
 map.on("style.load", () => {
   const colors = MAP_THEMES[theme];
-  map.setProjection({ type: "globe" });
+  map.setProjection({ type: view });
 
   for (const layer of map.getStyle().layers) {
     if (!layer.id.startsWith("place_")) continue;
@@ -331,24 +363,50 @@ function updateMapPadding() {
 new ResizeObserver(updateMapPadding).observe(sidebar);
 new ResizeObserver(updateMapPadding).observe(map.getContainer());
 
+// Members who share a city (or are very close) can't be separated within MAX_ZOOM, so list them instead.
+function showClusterPopup(lngLat, group) {
+  const content = document.createElement("div");
+  content.className = "popup";
+  const title = document.createElement("div");
+  title.className = "popup-meta";
+  const cities = [...new Set(group.map((m) => m.city))];
+  title.textContent = `${group.length} members · ${cities.length === 1 ? cities[0] : `${cities.length} cities`}`;
+  const list = document.createElement("div");
+  list.className = "cluster-list";
+  for (const m of [...group].sort((a, b) => a.name.localeCompare(b.name))) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "cluster-member";
+    const name = document.createElement("span");
+    name.textContent = m.name;
+    button.append(memberAvatar(m), name);
+    button.addEventListener("click", () => showPopup(m));
+    list.append(button);
+  }
+  content.append(title, list);
+  popup.setLngLat(lngLat).setDOMContent(content).addTo(map);
+}
+
 map.on("click", "clusters", async (e) => {
   const cluster = e.features[0];
-  const zoom = await map.getSource("members").getClusterExpansionZoom(cluster.properties.cluster_id);
-  map.easeTo({ center: cluster.geometry.coordinates, zoom, duration: 900 });
+  const source = map.getSource("members");
+  const zoom = await source.getClusterExpansionZoom(cluster.properties.cluster_id);
+  if (zoom <= MAX_ZOOM) return map.easeTo({ center: cluster.geometry.coordinates, zoom, duration: 900 });
+  const leaves = await source.getClusterLeaves(cluster.properties.cluster_id, 500, 0);
+  showClusterPopup(cluster.geometry.coordinates, leaves.map((f) => visibleMembers[f.properties.index]));
 });
 
 map.on("click", "member-points", (e) => {
   showPopup(visibleMembers[e.features[0].properties.index]);
 });
 
-// Clicking anywhere else selects the country, state or city under the cursor (see region.js).
+// Clicking anywhere else selects the country (or US state) under the cursor (see region.js).
 map.on("click", (e) => {
   if (map.queryRenderedFeatures(e.point, { layers: ["clusters", "member-points"] }).length) return;
-  const onCityLabel = map.queryRenderedFeatures(e.point, { layers: ["member-city-labels"] }).length > 0;
-  selectRegionAt(e.lngLat, onCityLabel ? "city" : null);
+  selectRegionAt(e.lngLat);
 });
 
-for (const layer of ["clusters", "member-points", "member-city-labels"]) {
+for (const layer of ["clusters", "member-points"]) {
   map.on("mouseenter", layer, () => (map.getCanvas().style.cursor = "pointer"));
   map.on("mouseleave", layer, () => (map.getCanvas().style.cursor = ""));
 }
@@ -379,14 +437,32 @@ function initials(name) {
     .toUpperCase();
 }
 
+// Sidebar filters: each is a dropdown of the values members actually have. To add one (e.g. ethnicity),
+// add the profile column, map it onto members in loadMembers, and add an entry here.
+const FILTERS = [
+  { key: "year", label: "Year" },
+  { key: "city", label: "City" },
+  { key: "heritage", label: "Heritage" },
+  { key: "industry", label: "Industry" },
+  { key: "position", label: "Ex-CODE position" },
+];
+
+const filterSelects = new Map(
+  FILTERS.map(({ key, label }) => {
+    const wrapper = document.createElement("label");
+    const select = document.createElement("select");
+    select.add(new Option("All", ""));
+    select.addEventListener("change", applyFilters);
+    wrapper.append(label, select);
+    filterFields.append(wrapper);
+    return [key, select];
+  })
+);
+
 // Rebuilds the filter options after each load, keeping the current choice when it still exists.
 function populateFilters() {
-  const years = [...new Set(members.map((m) => String(m.year)))].sort();
-  const cities = [...new Set(members.map((m) => m.city))].sort();
-  for (const [select, values] of [
-    [yearSelect, years],
-    [citySelect, cities],
-  ]) {
+  for (const [key, select] of filterSelects) {
+    const values = [...new Set(members.map((m) => m[key]).filter(Boolean).map(String))].sort();
     const current = select.value;
     select.length = 1;
     for (const value of values) select.add(new Option(value, value));
@@ -469,7 +545,7 @@ function memberRow(m) {
     li.classList.toggle("expanded", expanded);
     summary.setAttribute("aria-expanded", String(expanded));
     if (!expanded) return;
-    if (!activeRegion) map.flyTo({ center: [m.lng, m.lat], zoom: 10, speed: 0.9, curve: 1.6, essential: true });
+    if (!activeRegion) map.flyTo({ center: [m.lng, m.lat], zoom: MEMBER_ZOOM, speed: 1.2, curve: 1.42, essential: true });
     showPopup(m);
   });
 
@@ -477,24 +553,16 @@ function memberRow(m) {
   return li;
 }
 
-function sectionHeading(text) {
-  const li = document.createElement("li");
-  li.className = "member-section";
-  li.textContent = text;
-  return li;
-}
-
 function renderMembers() {
   const query = searchInput.value.trim().toLowerCase();
-  const year = yearSelect.value;
-  const city = citySelect.value;
+  const activeFilters = [...filterSelects].filter(([, select]) => select.value);
+  filterToggle.textContent = activeFilters.length ? `Filter (${activeFilters.length})` : "Filter";
 
   let rows = members
     .filter(
       (m) =>
         (!query || [m.name, m.city, m.company, m.industry, m.heritage].some((v) => v && v.toLowerCase().includes(query))) &&
-        (!year || String(m.year) === year) &&
-        (!city || m.city === city)
+        activeFilters.every(([key, select]) => String(m[key] ?? "") === select.value)
     )
     .map((m) => ({ ...m, distance: distanceMiles(origin, m) }))
     .sort((a, b) => a.distance - b.distance);
@@ -515,14 +583,7 @@ function renderMembers() {
     return;
   }
 
-  let nearbyHeadingShown = false;
-  for (const m of rows) {
-    if (m.nearby && !nearbyHeadingShown) {
-      memberList.append(sectionHeading(`Nearby · within ${NEARBY_KM} km`));
-      nearbyHeadingShown = true;
-    }
-    memberList.append(memberRow(m));
-  }
+  for (const m of rows) memberList.append(memberRow(m));
 }
 
 sidebarToggle.addEventListener("click", () => {
@@ -544,9 +605,13 @@ document.addEventListener("click", (e) => {
   }
 });
 
-searchInput.addEventListener("input", renderMembers);
-yearSelect.addEventListener("change", renderMembers);
-citySelect.addEventListener("change", renderMembers);
+// A popup may describe members the new search or filter hides, so close it.
+function applyFilters() {
+  popup.remove();
+  renderMembers();
+}
+
+searchInput.addEventListener("input", applyFilters);
 
 // Header: types "Where is CODE?" one word at a time with a character scramble, then erases and repeats.
 const TITLE_WORDS = [
