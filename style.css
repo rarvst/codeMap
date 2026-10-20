@@ -390,8 +390,8 @@ body {
   border-left: 2px solid transparent;
 }
 
-.member:hover,
-.member.expanded {
+/* Only the member whose card is open on the map is highlighted. */
+.member.selected {
   background: var(--code-purple-soft);
   border-left-color: var(--code-purple);
 }
@@ -415,9 +415,6 @@ body {
   outline-offset: -1px;
 }
 
-.member > .member-details {
-  padding: 0 14px 12px 60px;
-}
 
 .member-avatar {
   display: flex;
@@ -1026,17 +1023,13 @@ body {
   display: none;
 }
 
-/* Member details (popup and expanded list rows) */
+/* Member details (map popup) */
 .member-details {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 4px;
   font-size: 0.75rem;
-}
-
-.member-details[hidden] {
-  display: none;
 }
 
 .position-badge {
@@ -1165,7 +1158,7 @@ body {
   font-size: 0.6rem;
 }
 
-/* Map tools: timeline and heatmap, floating in the map area beside the sidebar */
+/* Map tools: the timeline, floating in the map area beside the sidebar */
 .map-tools {
   position: absolute;
   bottom: var(--gutter);
@@ -1232,27 +1225,6 @@ body {
   accent-color: var(--code-green);
 }
 
-.tool select {
-  padding: 3px 6px;
-  border: 1px solid var(--line-strong);
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--mono);
-  font-size: 0.72rem;
-}
-
-.heat-legend {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.6rem;
-}
-
-.heat-legend i {
-  width: 56px;
-  height: 6px;
-  background: linear-gradient(90deg, rgba(107, 33, 168, 0.55), #a855f7, #00c853, #d9ffe8);
-}
 
 /* Profile: live mode checkbox */
 .toggle-field {
@@ -1313,11 +1285,6 @@ body {
   color: var(--muted);
   background: var(--panel-solid);
   border-bottom: 1px solid var(--line);
-}
-
-.member.member-self {
-  border-left-color: var(--code-green);
-  background: color-mix(in srgb, var(--code-green) 10%, transparent);
 }
 
 .member.member-self .member-name {
