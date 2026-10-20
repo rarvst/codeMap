@@ -1164,3 +1164,142 @@ body {
   height: 24px;
   font-size: 0.6rem;
 }
+
+/* Map tools: timeline and heatmap, floating in the map area beside the sidebar */
+.map-tools {
+  position: absolute;
+  bottom: var(--gutter);
+  left: calc(clamp(270px, 28vw, 360px) + 2 * var(--gutter));
+  right: calc(var(--gutter) + 40px);
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.tool {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--line-strong);
+  background: var(--panel);
+  backdrop-filter: blur(6px);
+  font-size: 0.7rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+  pointer-events: auto;
+}
+
+.tool [hidden] {
+  display: none;
+}
+
+.tool-button {
+  padding: 3px 8px;
+  border: 1px solid var(--code-purple);
+  background: transparent;
+  color: var(--code-purple);
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.tool-button:hover,
+.tool-button[aria-pressed="true"] {
+  background: var(--code-purple);
+  color: #fff;
+}
+
+.tool-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.tool-value {
+  min-width: 9ch;
+  color: var(--green-text);
+  font-variant-numeric: tabular-nums;
+}
+
+#timeline {
+  width: clamp(120px, 18vw, 240px);
+  accent-color: var(--code-green);
+}
+
+.tool select {
+  padding: 3px 6px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+}
+
+.heat-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.6rem;
+}
+
+.heat-legend i {
+  width: 56px;
+  height: 6px;
+  background: linear-gradient(90deg, rgba(107, 33, 168, 0.55), #a855f7, #00c853, #d9ffe8);
+}
+
+/* Profile: live mode checkbox */
+.toggle-field {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  font-size: 0.72rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.toggle-field input {
+  margin-top: 2px;
+  accent-color: var(--code-green);
+}
+
+.toggle-field strong {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 0.72rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.live-badge {
+  padding: 2px 6px;
+  border: 1px solid var(--code-green);
+  color: var(--green-text);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+@media (max-width: 720px) {
+  .map-tools {
+    top: var(--gutter);
+    bottom: auto;
+    left: var(--gutter);
+    right: calc(var(--gutter) + 40px);
+    justify-content: flex-start;
+  }
+
+  .tool {
+    padding: 4px 8px;
+  }
+}

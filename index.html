@@ -74,6 +74,25 @@
     <main id="map"></main>
     <div id="map-hint" class="map-hint">Click a country or US state to explore it</div>
 
+    <div class="map-tools">
+      <div class="tool timeline-tool">
+        <button id="timeline-play" class="tool-button" type="button" aria-label="Play timeline">▶</button>
+        <label class="tool-label" for="timeline">Class of</label>
+        <input id="timeline" type="range" step="1" min="0" max="0" value="0">
+        <output id="timeline-value" for="timeline" class="tool-value">—</output>
+      </div>
+      <div class="tool heat-tool">
+        <button id="heat-toggle" class="tool-button" type="button" aria-pressed="false">Heatmap</button>
+        <select id="heat-measure" aria-label="Heatmap of" hidden>
+          <option value="">All members</option>
+          <option value="industry">Industry</option>
+          <option value="heritage">Heritage</option>
+        </select>
+        <select id="heat-value" aria-label="Heatmap value" hidden></select>
+        <span id="heat-legend" class="heat-legend" hidden><span>Fewer</span><i></i><span>More</span></span>
+      </div>
+    </div>
+
     <aside id="profile-panel" class="profile-panel" aria-labelledby="profile-title" hidden>
       <div class="sidebar-header">
         <h2 id="profile-title">My Profile</h2>
@@ -108,6 +127,14 @@
                  role="combobox" aria-autocomplete="list" aria-controls="city-suggestions" aria-expanded="false">
           <ul id="city-suggestions" class="city-suggestions" role="listbox" hidden></ul>
         </div>
+
+        <label class="toggle-field">
+          <input name="live_mode" type="checkbox">
+          <span>
+            <strong>Live mode</strong>
+            Show me in the city I'm in whenever I open the map, instead of the city above. Uses your browser's location, rounded to the city.
+          </span>
+        </label>
 
         <label class="field">
           <span>LinkedIn</span>
@@ -195,6 +222,7 @@
   <script src="config.js"></script>
   <script src="app.js"></script>
   <script src="region.js"></script>
+  <script src="tools.js"></script>
   <script src="profile.js"></script>
 </body>
 </html>

@@ -78,6 +78,7 @@ function fillForm(profile, contact) {
   f.position.value = profile?.code_position ?? "";
   f.email.value = contact?.email ?? "";
   f.phone.value = contact?.phone ?? "";
+  f.live_mode.checked = Boolean(profile?.live_mode);
   chosenCity = profile ? { city: profile.city, country: profile.country, lat: profile.lat, lng: profile.lng } : null;
   cityInput.value = profile ? `${profile.city}, ${profile.country}` : "";
   imageUrl = profile ? profile.image_url : meta.avatar_url ?? null;
@@ -130,7 +131,8 @@ db.auth.onAuthStateChange((event, session) => {
     if (event === "SIGNED_IN" || event === "SIGNED_OUT") loadMembers();
     if (!currentUser) return setOrigin(null);
     try {
-      const profile = await fetchOwnProfile();
+      let profile = await fetchOwnProfile();
+      if (profile?.live_mode) profile = await refreshLiveLocation(profile);
       setOrigin(profile);
       // First visit after signing in: open the form straight away if they aren't on the map yet.
       if (!profile && !promptedForProfile) openProfile();
@@ -140,6 +142,56 @@ db.auth.onAuthStateChange((event, session) => {
     }
   });
 });
+
+// Live mode: find the city the browser is in (Nominatim reverse lookup at city level) and store that city's center,
+// never the precise position.
+const LIVE_REFRESH_MS = 60 * 60 * 1000;
+
+async function locateLiveCity() {
+  if (!("geolocation" in navigator)) throw new Error("This browser can't share its location.");
+  const position = await new Promise((resolve, reject) =>
+    navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 15000, maximumAge: 10 * 60 * 1000 })
+  ).catch(() => {
+    throw new Error("Location access was blocked, so live mode can't find your city.");
+  });
+  const params = new URLSearchParams({
+    format: "jsonv2",
+    zoom: "10",
+    addressdetails: "1",
+    "accept-language": "en",
+    lat: String(position.coords.latitude),
+    lon: String(position.coords.longitude),
+  });
+  const res = await fetch(`https://nominatim.openstreetmap.org/reverse?${params}`);
+  if (!res.ok) throw new Error(`Couldn't look up your city (${res.status}).`);
+  const place = await res.json();
+  const address = place.address ?? {};
+  const city = address.city || address.town || address.village || address.municipality || place.name;
+  if (!city || !address.country) throw new Error("Couldn't work out which city you're in.");
+  return {
+    live_city: city,
+    live_country: address.country,
+    live_lat: roundCoord(Number(place.lat)),
+    live_lng: roundCoord(Number(place.lon)),
+    live_updated_at: new Date().toISOString(),
+  };
+}
+
+// On each visit with live mode on, move the member to their current city if it changed or is over an hour old.
+async function refreshLiveLocation(profile) {
+  const fresh = profile.live_updated_at && Date.now() - Date.parse(profile.live_updated_at) < LIVE_REFRESH_MS;
+  try {
+    const live = await locateLiveCity();
+    if (fresh && live.live_city === profile.live_city && live.live_country === profile.live_country) return profile;
+    const { error } = await db.from("profiles").update(live).eq("id", profile.id);
+    if (error) throw error;
+    await loadMembers();
+    return { ...profile, ...live };
+  } catch (err) {
+    console.warn("Live mode:", err.message);
+    return profile;
+  }
+}
 
 // City search (Photon, OpenStreetMap data). Coordinates are rounded to ~1 km so only the city is stored.
 let citySearchTimer = null;
@@ -283,7 +335,12 @@ profileForm.addEventListener("submit", async (e) => {
       industry: f.industry.value.trim() || null,
       company: f.company.value.trim() || null,
       code_position: f.position.value || null,
+      live_mode: f.live_mode.checked,
     };
+    if (profile.live_mode) {
+      setStatus("Finding your current city…");
+      Object.assign(profile, await locateLiveCity());
+    }
     const { error } = await db.from("profiles").upsert(profile);
     if (error) throw error;
 
@@ -296,10 +353,11 @@ profileForm.addEventListener("submit", async (e) => {
     if (contactError) throw contactError;
 
     deleteButton.hidden = false;
-    setStatus("Saved. You're on the map!");
+    const here = effectiveLocation(profile);
+    setStatus(here.live ? `Saved. You're on the map in ${here.city} (live).` : "Saved. You're on the map!");
     await loadMembers();
     setOrigin(profile);
-    map.flyTo({ center: [chosenCity.lng, chosenCity.lat], zoom: 6, speed: 0.9, curve: 1.6, essential: true });
+    map.flyTo({ center: [here.lng, here.lat], zoom: 6, speed: 1.2, curve: 1.42, essential: true });
   } catch (err) {
     setStatus(err.message, true);
   } finally {
