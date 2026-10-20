@@ -28,6 +28,14 @@ alter table public.profiles add column if not exists company text check (char_le
 alter table public.profiles add column if not exists code_position text
   check (code_position in ('President', 'VP', 'CM', 'VP Role', 'Resident', 'Associate'));
 
+-- Live mode: when on, the member is shown in the city their browser was last in (city center only).
+alter table public.profiles add column if not exists live_mode boolean not null default false;
+alter table public.profiles add column if not exists live_city text check (char_length(live_city) <= 120);
+alter table public.profiles add column if not exists live_country text check (char_length(live_country) <= 80);
+alter table public.profiles add column if not exists live_lat double precision check (live_lat between -90 and 90);
+alter table public.profiles add column if not exists live_lng double precision check (live_lng between -180 and 180);
+alter table public.profiles add column if not exists live_updated_at timestamptz;
+
 alter table public.profiles enable row level security;
 
 grant select on public.profiles to anon, authenticated;

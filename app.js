@@ -17,14 +17,24 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
 let members = [];
 let visibleMembers = [];
-let activeRegion = null; // set by region.js when a country/state/city is selected
+let activeRegion = null; // set by region.js when a country or US state is selected
+let timelineYear = null; // set by tools.js: show classes up to this year, or everyone when null
+
+// Where a member appears: their live city when live mode is on (and known), otherwise the city they entered.
+function effectiveLocation(p) {
+  const live = Boolean(p.live_mode && p.live_lat != null && p.live_lng != null);
+  return live
+    ? { city: p.live_city, country: p.live_country, lat: p.live_lat, lng: p.live_lng, live }
+    : { city: p.city, country: p.country, lat: p.lat, lng: p.lng, live };
+}
 
 // Distances are measured from the signed-in member's own city; visitors see distances from Babson.
 const BABSON_ORIGIN = { ...BABSON_CAMPUS, label: "Babson", memberId: null };
 let origin = BABSON_ORIGIN;
 
 function setOrigin(profile) {
-  origin = profile ? { lat: profile.lat, lng: profile.lng, label: profile.city, memberId: profile.id } : BABSON_ORIGIN;
+  const here = profile && effectiveLocation(profile);
+  origin = profile ? { lat: here.lat, lng: here.lng, label: here.city, memberId: profile.id } : BABSON_ORIGIN;
   renderMembers();
 }
 
@@ -98,9 +108,10 @@ function setTheme(next) {
 themeToggle.addEventListener("click", () => setTheme(theme === "dark" ? "light" : "dark"));
 showThemeToggle();
 
+// The button names the view you'll switch to, not the current one.
 function showViewToggle() {
-  viewToggle.textContent = view === "globe" ? "◍ Globe" : "▭ 2D map";
-  viewToggle.setAttribute("aria-pressed", String(view === "mercator"));
+  viewToggle.textContent = view === "globe" ? "▭ 2D map" : "◍ Globe";
+  viewToggle.setAttribute("aria-label", view === "globe" ? "Switch to 2D map" : "Switch to globe");
 }
 
 function setView(next) {
@@ -149,6 +160,7 @@ function updateMapMembers(members) {
   visibleMembers = members;
   map.getSource("members")?.setData(toGeoJSON(members));
   map.getSource("member-cities")?.setData(citiesGeoJSON(members));
+  updateHeat(members);
 }
 
 // Only http(s) links are rendered, so a profile can never inject a javascript: URL.
@@ -207,6 +219,12 @@ function memberDetails(m) {
     const badge = document.createElement("span");
     badge.className = "position-badge";
     badge.textContent = `Ex-CODE ${m.position}`;
+    details.append(badge);
+  }
+  if (m.live) {
+    const badge = document.createElement("span");
+    badge.className = "live-badge";
+    badge.textContent = "● Live location";
     details.append(badge);
   }
   if (m.company) details.append(detailLine("Company", m.company));
@@ -276,6 +294,7 @@ map.on("style.load", () => {
   }
 
   addRegionLayers(colors);
+  addHeatLayer();
 
   // Clustering merges members in the same city into one numbered dot until zoomed in.
   map.addSource("members", {
@@ -345,6 +364,8 @@ map.on("style.load", () => {
       "text-halo-width": 1.5,
     },
   });
+
+  applyHeatVisibility();
 });
 
 // Keep the map's focal point in the area the floating sidebar doesn't cover,
@@ -474,7 +495,9 @@ function populateFilters() {
 async function loadMembers() {
   const { data, error } = await db
     .from("profiles")
-    .select("id, name, year, city, country, lat, lng, linkedin_url, website_url, image_url, heritage, industry, company, code_position");
+    .select(
+      "id, name, year, city, country, lat, lng, linkedin_url, website_url, image_url, heritage, industry, company, code_position, live_mode, live_city, live_country, live_lat, live_lng"
+    );
   if (error) {
     console.error("Could not load members:", error.message);
     return;
@@ -492,10 +515,7 @@ async function loadMembers() {
     id: p.id,
     name: p.name,
     year: p.year,
-    city: p.city,
-    country: p.country,
-    lat: p.lat,
-    lng: p.lng,
+    ...effectiveLocation(p),
     linkedin: p.linkedin_url,
     website: p.website_url,
     image: p.image_url,
@@ -507,6 +527,7 @@ async function loadMembers() {
     phone: contacts.get(p.id)?.phone,
   }));
   populateFilters();
+  refreshTools();
   renderMembers();
 }
 
@@ -562,7 +583,8 @@ function renderMembers() {
     .filter(
       (m) =>
         (!query || [m.name, m.city, m.company, m.industry, m.heritage].some((v) => v && v.toLowerCase().includes(query))) &&
-        activeFilters.every(([key, select]) => String(m[key] ?? "") === select.value)
+        activeFilters.every(([key, select]) => String(m[key] ?? "") === select.value) &&
+        (timelineYear === null || m.year <= timelineYear)
     )
     .map((m) => ({ ...m, distance: distanceMiles(origin, m) }))
     .sort((a, b) => a.distance - b.distance);
