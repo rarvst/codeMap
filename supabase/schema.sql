@@ -10,12 +10,23 @@ create table if not exists public.profiles (
   country     text not null check (char_length(country) between 1 and 80),
   lat         double precision not null check (lat between -90 and 90),
   lng         double precision not null check (lng between -180 and 180),
-  headline    text check (char_length(headline) <= 120),
   linkedin_url text check (linkedin_url ~* '^https://([a-z]+\.)?linkedin\.com/'),
   website_url  text check (website_url ~* '^https?://[^\s]+$'),
   image_url    text check (image_url ~* '^https://[^\s]+$'),
+  heritage     text check (char_length(heritage) <= 80),
+  industry     text check (char_length(industry) <= 60),
+  company      text check (char_length(company) <= 80),
+  code_position text check (code_position in ('President', 'VP', 'CM', 'VP Role', 'Resident', 'Associate')),
   created_at  timestamptz not null default now()
 );
+
+-- Upgrades for databases created before these fields existed (no-ops on a fresh install).
+alter table public.profiles drop column if exists headline;
+alter table public.profiles add column if not exists heritage text check (char_length(heritage) <= 80);
+alter table public.profiles add column if not exists industry text check (char_length(industry) <= 60);
+alter table public.profiles add column if not exists company text check (char_length(company) <= 80);
+alter table public.profiles add column if not exists code_position text
+  check (code_position in ('President', 'VP', 'CM', 'VP Role', 'Resident', 'Associate'));
 
 alter table public.profiles enable row level security;
 
@@ -36,6 +47,34 @@ create policy "Members update their own profile" on public.profiles
 
 drop policy if exists "Members delete their own profile" on public.profiles;
 create policy "Members delete their own profile" on public.profiles
+  for delete to authenticated using ((select auth.uid()) = id);
+
+-- Contact details: kept apart from profiles so only signed-in members can read them.
+create table if not exists public.profile_contacts (
+  id    uuid primary key references public.profiles(id) on delete cascade,
+  email text check (char_length(email) <= 254 and email ~* '^[^@\s]+@[^@\s]+\.[^@\s]+$'),
+  phone text check (phone ~ '^\+?[0-9 ().-]{7,25}$')
+);
+
+alter table public.profile_contacts enable row level security;
+
+revoke all on public.profile_contacts from anon;
+grant select, insert, update, delete on public.profile_contacts to authenticated;
+
+drop policy if exists "Signed-in members read contacts" on public.profile_contacts;
+create policy "Signed-in members read contacts" on public.profile_contacts
+  for select to authenticated using (true);
+
+drop policy if exists "Members create their own contact" on public.profile_contacts;
+create policy "Members create their own contact" on public.profile_contacts
+  for insert to authenticated with check ((select auth.uid()) = id);
+
+drop policy if exists "Members update their own contact" on public.profile_contacts;
+create policy "Members update their own contact" on public.profile_contacts
+  for update to authenticated using ((select auth.uid()) = id) with check ((select auth.uid()) = id);
+
+drop policy if exists "Members delete their own contact" on public.profile_contacts;
+create policy "Members delete their own contact" on public.profile_contacts
   for delete to authenticated using ((select auth.uid()) = id);
 
 -- Profile photos: public bucket, 2 MB images, each member writes only inside a folder named after their user id.

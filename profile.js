@@ -22,6 +22,15 @@ let imageUrl = null; // saved photo URL (or the Google avatar for new profiles)
 let photoFile = null; // newly picked file, uploaded on save
 let promptedForProfile = false;
 
+// Heritage options: every ISO country, named in English by the browser.
+const COUNTRY_CODES =
+  "AD AE AF AG AI AL AM AO AR AS AT AU AW AZ BA BB BD BE BF BG BH BI BJ BM BN BO BR BS BT BW BY BZ CA CD CF CG CH CI CK CL CM CN CO CR CU CV CW CY CZ DE DJ DK DM DO DZ EC EE EG ER ES ET FI FJ FM FO FR GA GB GD GE GH GI GL GM GN GQ GR GT GU GW GY HK HN HR HT HU ID IE IL IN IQ IR IS IT JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MG MH MK ML MM MN MO MR MT MU MV MW MX MY MZ NA NC NE NG NI NL NO NP NR NZ OM PA PE PF PG PH PK PL PR PS PT PW PY QA RO RS RU RW SA SB SC SD SE SG SI SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TG TH TJ TL TM TN TO TR TT TV TW TZ UA UG US UY UZ VA VC VE VG VI VN VU WS XK YE ZA ZM ZW";
+const regionNames = new Intl.DisplayNames(["en"], { type: "region" });
+const heritageSelect = profileForm.elements.heritage;
+for (const name of COUNTRY_CODES.split(" ").map((code) => regionNames.of(code)).sort((a, b) => a.localeCompare(b))) {
+  heritageSelect.add(new Option(name, name));
+}
+
 function setStatus(message, isError = false) {
   profileStatus.textContent = message;
   profileStatus.classList.toggle("error", isError);
@@ -33,6 +42,12 @@ function updateJoinButton() {
 
 async function fetchOwnProfile() {
   const { data, error } = await db.from("profiles").select("*").eq("id", currentUser.id).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function fetchOwnContact() {
+  const { data, error } = await db.from("profile_contacts").select("email, phone").eq("id", currentUser.id).maybeSingle();
   if (error) throw error;
   return data;
 }
@@ -50,14 +65,19 @@ function showPhotoPreview(src, name) {
   photoRemove.hidden = !src;
 }
 
-function fillForm(profile) {
+function fillForm(profile, contact) {
   const meta = currentUser.user_metadata ?? {};
   const f = profileForm.elements;
   f.name.value = profile?.name ?? meta.full_name ?? meta.name ?? "";
   f.year.value = profile?.year ?? "";
-  f.headline.value = profile?.headline ?? "";
   f.linkedin.value = profile?.linkedin_url ?? "";
   f.website.value = profile?.website_url ?? "";
+  f.heritage.value = profile?.heritage ?? "";
+  f.industry.value = profile?.industry ?? "";
+  f.company.value = profile?.company ?? "";
+  f.position.value = profile?.code_position ?? "";
+  f.email.value = contact?.email ?? "";
+  f.phone.value = contact?.phone ?? "";
   chosenCity = profile ? { city: profile.city, country: profile.country, lat: profile.lat, lng: profile.lng } : null;
   cityInput.value = profile ? `${profile.city}, ${profile.country}` : "";
   imageUrl = profile ? profile.image_url : meta.avatar_url ?? null;
@@ -71,8 +91,8 @@ async function openProfile() {
   profilePanel.hidden = false;
   setStatus("Loading…");
   try {
-    const profile = await fetchOwnProfile();
-    fillForm(profile);
+    const [profile, contact] = await Promise.all([fetchOwnProfile(), fetchOwnContact()]);
+    fillForm(profile, contact);
     setStatus(profile ? "" : "Fill in your details to appear on the map.");
   } catch (err) {
     setStatus(err.message, true);
@@ -104,12 +124,17 @@ signOutButton.addEventListener("click", async () => {
 db.auth.onAuthStateChange((event, session) => {
   currentUser = session?.user ?? null;
   updateJoinButton();
-  if (!currentUser || promptedForProfile) return;
-  promptedForProfile = true;
+  if (event === "TOKEN_REFRESHED") return;
   setTimeout(async () => {
+    // Contact details are only readable when signed in, so reload when that changes.
+    if (event === "SIGNED_IN" || event === "SIGNED_OUT") loadMembers();
+    if (!currentUser) return setOrigin(null);
     try {
+      const profile = await fetchOwnProfile();
+      setOrigin(profile);
       // First visit after signing in: open the form straight away if they aren't on the map yet.
-      if (!(await fetchOwnProfile())) openProfile();
+      if (!profile && !promptedForProfile) openProfile();
+      promptedForProfile = true;
     } catch (err) {
       console.error(err);
     }
@@ -226,6 +251,10 @@ function validateForm() {
   if (linkedin && !/^https:\/\/([a-z]+\.)?linkedin\.com\//i.test(linkedin)) return "LinkedIn link should look like https://linkedin.com/in/you";
   const website = f.website.value.trim();
   if (website && !safeUrl(website)) return "Website link should start with https://";
+  const email = f.email.value.trim();
+  if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return "Enter a valid email address.";
+  const phone = f.phone.value.trim();
+  if (phone && !/^\+?[0-9 ().-]{7,25}$/.test(phone)) return "Phone can contain digits, spaces, + ( ) - and . only.";
   return null;
 }
 
@@ -242,21 +271,34 @@ profileForm.addEventListener("submit", async (e) => {
     else if (!imageUrl) await removeOldPhotos(null);
     photoFile = null;
 
-    const { error } = await db.from("profiles").upsert({
+    const profile = {
       id: currentUser.id,
       name: f.name.value.trim(),
       year: Number(f.year.value),
       ...chosenCity,
-      headline: f.headline.value.trim() || null,
       linkedin_url: f.linkedin.value.trim() || null,
       website_url: f.website.value.trim() || null,
       image_url: imageUrl,
-    });
+      heritage: f.heritage.value || null,
+      industry: f.industry.value.trim() || null,
+      company: f.company.value.trim() || null,
+      code_position: f.position.value || null,
+    };
+    const { error } = await db.from("profiles").upsert(profile);
     if (error) throw error;
+
+    const email = f.email.value.trim();
+    const phone = f.phone.value.trim();
+    const { error: contactError } =
+      email || phone
+        ? await db.from("profile_contacts").upsert({ id: currentUser.id, email: email || null, phone: phone || null })
+        : await db.from("profile_contacts").delete().eq("id", currentUser.id);
+    if (contactError) throw contactError;
 
     deleteButton.hidden = false;
     setStatus("Saved. You're on the map!");
     await loadMembers();
+    setOrigin(profile);
     map.flyTo({ center: [chosenCity.lng, chosenCity.lat], zoom: 6, speed: 0.9, curve: 1.6, essential: true });
   } catch (err) {
     setStatus(err.message, true);
@@ -273,7 +315,8 @@ deleteButton.addEventListener("click", async () => {
     if (error) throw error;
     await removeOldPhotos(null);
     await loadMembers();
-    fillForm(null);
+    setOrigin(null);
+    fillForm(null, null);
     setStatus("Your profile was removed.");
   } catch (err) {
     setStatus(err.message, true);

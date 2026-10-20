@@ -9,6 +9,12 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&display=swap">
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css">
   <link rel="stylesheet" href="style.css">
+  <script>
+    // Apply the saved day/night theme before first paint to avoid a flash of the wrong colors.
+    try {
+      if (localStorage.getItem("theme") === "light") document.documentElement.dataset.theme = "light";
+    } catch {}
+  </script>
 </head>
 <body>
   <header class="site-header">
@@ -17,6 +23,7 @@
       <span id="title-text" aria-hidden="true"></span><span class="title-cursor" aria-hidden="true"></span>
     </h1>
     <div class="status-bar"><b id="stat-mapped">0</b> mapped</div>
+    <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Day mode" aria-pressed="false">☾ Night</button>
     <button id="join-button" class="join-button" type="button">Join the map</button>
   </header>
 
@@ -47,12 +54,29 @@
           </div>
         </div>
 
-        <h3 class="list-heading"><span>All Members</span><span id="list-count"></span></h3>
+        <div id="region-bar" class="region-bar" hidden>
+          <div class="region-top">
+            <div class="region-title">
+              <span class="region-label">Area</span>
+              <strong id="region-name"></strong>
+              <span id="region-count" class="region-count"></span>
+            </div>
+            <button id="region-close" class="sidebar-toggle" type="button" aria-label="Clear selected area">&times;</button>
+          </div>
+          <div class="region-levels" role="group" aria-label="Area level">
+            <button type="button" data-region-level="city" aria-pressed="false">City</button>
+            <button type="button" data-region-level="state" aria-pressed="false">State</button>
+            <button type="button" data-region-level="country" aria-pressed="false">Country</button>
+          </div>
+        </div>
+
+        <h3 class="list-heading"><span>Members <span id="list-count"></span></span><span id="distance-origin"></span></h3>
         <ul id="member-list" class="member-list"></ul>
       </div>
     </aside>
 
     <main id="map"></main>
+    <div id="map-hint" class="map-hint">Click a country, state or city to explore it</div>
 
     <aside id="profile-panel" class="profile-panel" aria-labelledby="profile-title" hidden>
       <div class="sidebar-header">
@@ -90,19 +114,74 @@
         </div>
 
         <label class="field">
-          <span>Headline</span>
-          <input name="headline" type="text" maxlength="120" placeholder="Building a fintech app">
-        </label>
-
-        <label class="field">
           <span>LinkedIn</span>
           <input name="linkedin" type="url" placeholder="https://linkedin.com/in/you">
         </label>
 
         <label class="field">
-          <span>GitHub / website</span>
-          <input name="website" type="url" placeholder="https://github.com/you">
+          <span>Website</span>
+          <input name="website" type="url" placeholder="https://yoursite.com">
         </label>
+
+        <details class="more-options">
+          <summary>More options</summary>
+
+          <label class="field">
+            <span>Heritage</span>
+            <select name="heritage"><option value="">Choose a country</option></select>
+          </label>
+
+          <label class="field">
+            <span>Industry</span>
+            <input name="industry" type="text" maxlength="60" list="industry-options" placeholder="Technology">
+            <datalist id="industry-options">
+              <option value="Technology"></option>
+              <option value="Finance"></option>
+              <option value="Consulting"></option>
+              <option value="Venture Capital / Private Equity"></option>
+              <option value="Entrepreneurship / Startups"></option>
+              <option value="Healthcare"></option>
+              <option value="Real Estate"></option>
+              <option value="Marketing"></option>
+              <option value="Media & Entertainment"></option>
+              <option value="Consumer Goods"></option>
+              <option value="Education"></option>
+              <option value="Government / Nonprofit"></option>
+              <option value="Energy"></option>
+              <option value="Legal"></option>
+            </datalist>
+          </label>
+
+          <label class="field">
+            <span>Company</span>
+            <input name="company" type="text" maxlength="80" autocomplete="organization">
+          </label>
+
+          <label class="field">
+            <span>Ex-CODE position</span>
+            <select name="position">
+              <option value="">None</option>
+              <option>President</option>
+              <option>VP</option>
+              <option>CM</option>
+              <option>VP Role</option>
+              <option>Resident</option>
+              <option>Associate</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Email</span>
+            <input name="email" type="email" maxlength="254" autocomplete="email">
+          </label>
+
+          <label class="field">
+            <span>Phone</span>
+            <input name="phone" type="tel" maxlength="25" autocomplete="tel" placeholder="+1 555 123 4567">
+          </label>
+
+          <p class="field-note">Email and phone are only shown to signed-in members.</p>
+        </details>
 
         <p id="profile-status" class="profile-status" role="status"></p>
 
@@ -119,6 +198,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
   <script src="config.js"></script>
   <script src="app.js"></script>
+  <script src="region.js"></script>
   <script src="profile.js"></script>
 </body>
 </html>
