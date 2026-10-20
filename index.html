@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Babson CODE Network Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="logo" aria-hidden="true">&lt;/&gt;</div>
+    <h1 class="site-title">Babson CODE</h1>
+  </header>
+
+  <div class="layout">
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <h2>Members</h2>
+        <button id="sidebar-toggle" class="sidebar-toggle" aria-label="Collapse members sidebar" aria-expanded="true">&#x2039;</button>
+      </div>
+
+      <div class="sidebar-content">
+        <div class="search-row">
+          <input id="member-search" type="search" placeholder="Search members" aria-label="Search members">
+          <div class="filter">
+            <button id="filter-toggle" class="filter-toggle" aria-expanded="false" aria-controls="filter-panel">Filter</button>
+            <div id="filter-panel" class="filter-panel" hidden>
+              <label>
+                Year
+                <select id="filter-year"><option value="">All</option></select>
+              </label>
+              <label>
+                City
+                <select id="filter-city"><option value="">All</option></select>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <h3 class="list-heading">All Members</h3>
+        <ul id="member-list" class="member-list"></ul>
+      </div>
+    </aside>
+
+    <main id="map"></main>
+  </div>
+
+  <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
