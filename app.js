@@ -88,8 +88,19 @@ map.addControl(new maplibregl.NavigationControl(), "top-right");
 
 const popup = new maplibregl.Popup({ offset: 12, closeButton: false, focusAfterOpen: false });
 
+// Header buttons carry a full and a short label; narrow screens show only the short one (see style.css).
+function setButtonLabel(button, full, short) {
+  const fullLabel = document.createElement("span");
+  fullLabel.className = "label-full";
+  fullLabel.textContent = full;
+  const shortLabel = document.createElement("span");
+  shortLabel.className = "label-short";
+  shortLabel.textContent = short;
+  button.replaceChildren(fullLabel, shortLabel);
+}
+
 function showThemeToggle() {
-  themeToggle.textContent = theme === "light" ? "☀ Day" : "☾ Night";
+  setButtonLabel(themeToggle, theme === "light" ? "☀ Day" : "☾ Night", theme === "light" ? "☀" : "☾");
   themeToggle.setAttribute("aria-pressed", String(theme === "light"));
 }
 
@@ -110,7 +121,7 @@ showThemeToggle();
 
 // The button names the view you'll switch to, not the current one.
 function showViewToggle() {
-  viewToggle.textContent = view === "globe" ? "▭ 2D map" : "◍ Globe";
+  setButtonLabel(viewToggle, view === "globe" ? "▭ 2D map" : "◍ Globe", view === "globe" ? "2D" : "3D");
   viewToggle.setAttribute("aria-label", view === "globe" ? "Switch to 2D map" : "Switch to globe");
 }
 
