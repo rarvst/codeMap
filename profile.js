@@ -37,7 +37,7 @@ function setStatus(message, isError = false) {
 }
 
 function updateJoinButton() {
-  joinButton.textContent = currentUser ? "My profile" : "Join the map";
+  setButtonLabel(joinButton, currentUser ? "My profile" : "Join the map", currentUser ? "Profile" : "Join");
 }
 
 async function fetchOwnProfile() {

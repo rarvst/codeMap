@@ -541,7 +541,9 @@ body {
     height: 50%;
   }
 
+  /* Collapsed stays docked at the bottom as a slim bar (the desktop rule would unpin it to the top). */
   .sidebar.collapsed {
+    bottom: var(--gutter);
     width: auto;
     height: auto;
   }
@@ -1303,4 +1305,71 @@ body {
   font-size: 0.62rem;
   letter-spacing: 1px;
   text-transform: uppercase;
+}
+
+/* Header on phones: one row that fits — short button labels, no "mapped" counter (the sidebar shows it). */
+.label-short {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .site-header {
+    gap: 8px;
+    padding: 0 10px;
+  }
+
+  .logo {
+    width: 30px;
+    height: 30px;
+  }
+
+  .site-title {
+    flex: 1;
+    overflow: hidden;
+    font-size: 0.95rem;
+    letter-spacing: 0;
+  }
+
+  .title-cursor {
+    width: 0.5em;
+  }
+
+  .status-bar {
+    display: none;
+  }
+
+  .theme-toggle,
+  .join-button {
+    padding: 6px 9px;
+    font-size: 0.7rem;
+  }
+
+  .label-full {
+    display: none;
+  }
+
+  .label-short {
+    display: inline;
+  }
+
+  /* Timeline stretches across the top of the map without wrapping. */
+  .timeline-tool {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .timeline-tool .tool-label {
+    display: none;
+  }
+
+  #timeline {
+    flex: 1;
+    width: auto;
+    min-width: 60px;
+  }
+
+  .tool-value {
+    min-width: 0;
+    white-space: nowrap;
+  }
 }
